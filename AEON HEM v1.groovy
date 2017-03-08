@@ -340,6 +340,36 @@ def zwaveEvent(physicalgraph.zwave.commands.meterv1.MeterReport cmd) {
     }           
 }
 
+def zwaveEvent(physicalgraph.zwave.commands.sensormultilevelv1.SensorMultilevelReport cmd) {
+//    log.debug "SensorMultilevelReport ${cmd}"
+    
+    def dispValue
+    def newValue
+    
+    if (cmd.sensorType == 4) {
+        if (cmd.scale == 0) {
+            newValue = Math.round( cmd.scaledSensorValue )       // really not worth the hassle to show decimals for Watts
+            if (newValue != state.powerValue) {
+                dispValue = newValue+"\nWatts"
+                sendEvent(name: "powerDisp", value: dispValue as String, unit: "")
+                
+                if (newValue < state.powerLow) {
+                    dispValue = "Low\n"+newValue+" W\n"+timeString
+                    sendEvent(name: "powerOne", value: dispValue as String, unit: "")
+                    state.powerLow = newValue
+                }
+                if (newValue > state.powerHigh) {
+                    dispValue = "High\n"+newValue+" W\n"+timeString
+                    sendEvent(name: "powerTwo", value: dispValue as String, unit: "")
+                    state.powerHigh = newValue
+                }
+                state.powerValue = newValue
+                [name: "power", value: newValue, unit: "W"]
+            }
+        }
+	}
+}
+
 def zwaveEvent(physicalgraph.zwave.commands.batteryv1.BatteryReport cmd) {
     def map = [:]
     map.name = "battery"
@@ -409,16 +439,16 @@ def reset() {
 def configure() {
     // TODO: Turn on reporting for each leg of power - display as alternate view (Currently those values are
     //       returned as zwaveEvents...they probably aren't implemented in the core Meter device yet.
-
+    
     def cmd = delayBetween([
         zwave.configurationV1.configurationSet(parameterNumber: 3, size: 1, scaledConfigurationValue: 1).format(),      // Enable selective reporting
-        zwave.configurationV1.configurationSet(parameterNumber: 4, size: 2, scaledConfigurationValue: 50).format(),     // Don't send unless watts have increased by 50
-        zwave.configurationV1.configurationSet(parameterNumber: 8, size: 2, scaledConfigurationValue: 10).format(),     // Or by 10% (these 3 are the default values
-        zwave.configurationV1.configurationSet(parameterNumber: 101, size: 4, scaledConfigurationValue: 10).format(),   // Average Watts & Amps
-        zwave.configurationV1.configurationSet(parameterNumber: 111, size: 4, scaledConfigurationValue: 30).format(),   // Every 30 Seconds
-        zwave.configurationV1.configurationSet(parameterNumber: 102, size: 4, scaledConfigurationValue: 4).format(),    // Average Voltage
-        zwave.configurationV1.configurationSet(parameterNumber: 112, size: 4, scaledConfigurationValue: 150).format(),  // every 2.5 minute
-        zwave.configurationV1.configurationSet(parameterNumber: 103, size: 4, scaledConfigurationValue: 1).format(),    // Total kWh (cumulative)
+        zwave.configurationV1.configurationSet(parameterNumber: 4, size: 2, scaledConfigurationValue: 25).format(),     // Don't send unless watts have increased by 25
+        zwave.configurationV1.configurationSet(parameterNumber: 8, size: 1, scaledConfigurationValue: 5).format(),     // Or by 5%
+		zwave.configurationV1.configurationSet(parameterNumber: 101, size: 4, scaledConfigurationValue: 8).format(),   // Cumulative kWh
+        zwave.configurationV1.configurationSet(parameterNumber: 111, size: 4, scaledConfigurationValue: 300).format(),   // Every 5 minutes
+        zwave.configurationV1.configurationSet(parameterNumber: 102, size: 4, scaledConfigurationValue: 4).format(),    // Current Watts
+        zwave.configurationV1.configurationSet(parameterNumber: 112, size: 4, scaledConfigurationValue: 30).format(),  // every 30 seconds
+        zwave.configurationV1.configurationSet(parameterNumber: 103, size: 4, scaledConfigurationValue: 1).format(),    // Battery %
         zwave.configurationV1.configurationSet(parameterNumber: 113, size: 4, scaledConfigurationValue: 300).format()   // every 5 minutes
     ])
     log.debug cmd
